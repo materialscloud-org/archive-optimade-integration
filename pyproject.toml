@@ -2,7 +2,7 @@
 name = "optimade-maker"
 description = "Tools for making OPTIMADE APIs from raw structural data."
 readme = "README.md"
-version = "0.2.2"
+version = "0.3.0"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 keywords = ["optimade", "jsonapi", "materials"]
