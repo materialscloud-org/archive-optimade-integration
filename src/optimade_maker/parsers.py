@@ -1,20 +1,21 @@
 from pathlib import Path
 from typing import Any, Callable
 
-import ase.io
-import pandas
-import pybtex.database
-import pymatgen.core
-import pymatgen.entries.computed_entries
+try:
+    import ase.io
+    import pandas
+    import pymatgen.core
+    import pymatgen.entries.computed_entries
+    from pymatgen.entries.computed_entries import ComputedStructureEntry
+except ImportError as exc:
+    raise ImportError(
+        "The parsers module requires the `ingest` extra of this package to be installed."
+    ) from exc
+
 from optimade.adapters import Structure
 from optimade.models import EntryResource
-from pymatgen.entries.computed_entries import ComputedStructureEntry
 
 from optimade_maker.config import PropertyDefinition
-
-
-def pybtex_to_optimade(bib_entry: Any, properties=None) -> EntryResource:
-    raise NotImplementedError
 
 
 def load_csv_file(
@@ -118,7 +119,6 @@ ENTRY_PARSERS: dict[str, list[Callable[[Path], Any]]] = {
         ),
         wrapped_json_parser(pymatgen.core.Structure.from_dict),
     ],
-    "references": [pybtex.database.parse_file],
 }
 
 
@@ -159,5 +159,4 @@ OPTIMADE_CONVERTERS: dict[
     str, list[Callable[[Any, list[PropertyDefinition] | None], EntryResource | dict]]
 ] = {
     "structures": [structure_ingest_wrapper, parse_computed_structure_entry],
-    "references": [pybtex_to_optimade],
 }

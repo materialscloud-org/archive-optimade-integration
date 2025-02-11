@@ -3,7 +3,7 @@ name = "optimade-maker"
 description = "Tools for making OPTIMADE APIs from raw structural data."
 readme = "README.md"
 version = "0.3.0"
-requires-python = ">=3.10"
+requires-python = ">= 3.10, < 3.13"
 license = { text = "MIT" }
 keywords = ["optimade", "jsonapi", "materials"]
 
@@ -20,11 +20,8 @@ classifiers = [
 
 dependencies = [
     "pydantic~=2.2",
-    "optimade[server,ase]~=1.1",
+    "optimade[server]~=1.1",
     "pyyaml~=6.0",
-    "pymatgen>=2023.9",
-    "pandas >= 1.5, < 3",
-    "pybtex~=0.24",
     "tqdm~=4.65",
     "requests~=2.31",
     "numpy >= 1.22, < 3",
@@ -32,7 +29,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-tests = ["pytest~=7.4", "pytest-cov~=4.0"]
+ase = ["ase ~= 3.22"]
+pymatgen = ["pymatgen >= 2023.9"]
+pandas = ["pandas >= 1.5, < 3"]
+ingest = ["optimade-maker[ase,pymatgen,pandas]"]
+tests = ["pytest~=8.3", "pytest-cov~=6.0"]
 dev = ["black", "ruff", "pre-commit", "mypy", "isort"]
 
 [tool.ruff]

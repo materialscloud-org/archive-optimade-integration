@@ -6,7 +6,13 @@
 
 # <div align="center">optimade-maker</div>
 
+<div align="center">
+
 [![PyPI - Version](https://img.shields.io/pypi/v/optimade-maker?color=4CC61E)](https://pypi.org/project/optimade-maker/)
+![PyPI - License](https://img.shields.io/pypi/l/optimade-maker?color=blue)
+![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/materialscloud-org/optimade-maker/ci.yml)
+
+</div>
 
 Tools for making [OPTIMADE APIs](https://optimade.org) from various formats of structural data (e.g. an archive of CIF files).
 

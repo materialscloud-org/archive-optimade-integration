@@ -1,6 +1,7 @@
 import json
 import os
 import traceback
+import warnings
 from pathlib import Path
 
 import bson.json_util
@@ -39,6 +40,8 @@ def set_config_env_variables(config_dict):
         env_var = f"OPTIMADE_{key}"
         if isinstance(value, (dict, list, bool)):
             os.environ[env_var] = json.dumps(value)
+        elif value is None:
+            os.environ[env_var] = "null"
         else:
             os.environ[env_var] = str(value)
 
@@ -74,8 +77,12 @@ def get_provider_fields_from_jsonl(jsonl_path: Path):
 
     with open(jsonl_path, "r") as fhandle:
         try:
-            for json_str in fhandle:
-                entry = bson.json_util.loads(json_str)
+            for line_no, json_str in enumerate(fhandle):
+                try:
+                    entry = bson.json_util.loads(json_str)
+                except json.JSONDecodeError:
+                    warnings.warn(f"Found bad JSONL line at L{line_no}")
+                    continue
 
                 if "properties" in entry:
                     if "type" not in entry:
@@ -89,6 +96,13 @@ def get_provider_fields_from_jsonl(jsonl_path: Path):
                         if entry["type"] == "info":
                             _read_custom_fields(entry["properties"], entry["id"])
 
+                elif "x-optimade" in entry:
+                    continue
+                # If this isn't an info endpoint, or the first line header, then we break
+                # as presumably we have reached the data itself
+                else:
+                    break
+
         except Exception as exc:
             traceback.print_exc()
             print(f"Error {exc}")
@@ -101,9 +115,18 @@ class OptimakeServer:
     Uses the MongoMock backend.
     """
 
-    def __init__(self, path: Path, port: int = 5000):
+    def __init__(self, path: Path, port: int = 5000, **config_kws):
+        """Initialise the OptimakeServer instance.
+
+        Parameters:
+            path: Path to the directory containing the optimade.jsonl file.
+            port: Port to run the API on.
+            config_kws: Additional optimade-python-tools configuration options to pass to the API.
+
+        """
         self.path = path
         self.port = port
+        self.config_kws = config_kws
 
         self.base_url = f"http://localhost:{self.port}"
         # self.index_base_url = "http://localhost:5001"
@@ -119,12 +142,25 @@ class OptimakeServer:
             "debug": False,
             "insert_test_data": False,
             "insert_from_jsonl": str(jsonl_path.resolve()),
+            "create_default_index": True,
             "base_url": self.base_url,
             "provider": get_optimake_provider_info(),
             # "index_base_url": self.index_base_url,
             "provider_fields": provider_fields,
             "log_dir": str(self.path.resolve()),
         }
+
+        config_dict.update(self.config_kws)
+
+        # Loop through any environment variables that start with "OPTIMAKE_" and set them
+        for env in os.environ:
+            if env.startswith("OPTIMAKE_"):
+                LOGGER.debug(
+                    "Reading environment variable %s into config with value %s",
+                    env,
+                    os.environ[env],
+                )
+                config_dict[env.replace("OPTIMAKE_", "").lower()] = os.environ[env]
 
         LOGGER.debug(f"CONFIG: {config_dict}")
 

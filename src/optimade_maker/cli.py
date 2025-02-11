@@ -22,11 +22,16 @@ def cli():
     type=click.Path(),
     help="The path to write the JSONL file to.",
 )
+@click.option(
+    "--limit",
+    type=int,
+    help="Limit the ingestion to a fixed number of structures (useful for testing).",
+)
 @click.argument(
     "path",
     type=click.Path(),
 )
-def convert(jsonl_path, path):
+def convert(jsonl_path, path, limit=None):
     """
     Convert a raw data archive into OPTIMADE JSONL.
 
@@ -38,8 +43,7 @@ def convert(jsonl_path, path):
         jsonl_path = Path(jsonl_path)
         if jsonl_path.exists():
             raise FileExistsError(f"File already exists at {jsonl_path}.")
-
-    convert_archive(Path(path), jsonl_path=jsonl_path)
+    convert_archive(Path(path), jsonl_path=jsonl_path, limit=limit)
 
 
 @cli.command()

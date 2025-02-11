@@ -16,14 +16,13 @@ from optimade.models import EntryInfoResource, EntryResource
 from optimade.server.schemas import ENTRY_INFO_SCHEMAS, retrieve_queryable_properties
 
 from .config import Config, EntryConfig, JSONLConfig, ParsedFiles, PropertyDefinition
-from .parsers import ENTRY_PARSERS, OPTIMADE_CONVERTERS, PROPERTY_PARSERS, TYPE_MAP
 
-PROVIDER_PREFIX = os.environ.get("optimake_PROVIDER_PREFIX", "optimake")
+PROVIDER_PREFIX = os.environ.get("OPTIMAKE_PROVIDER_PREFIX", "optimake")
 
 
 def _construct_entry_type_info(
     type: str,
-    properties: list[PropertyDefinition],
+    properties: list[PropertyDefinition] | list[dict],
     provider_prefix: str,
 ) -> EntryInfoResource:
     """Take the provided property definitions and construct an entry info response.
@@ -40,28 +39,39 @@ def _construct_entry_type_info(
         )
 
     info: dict[str, Any] = {"formats": ["json"], "description": type}
-    info["properties"] = {
-        f"_{provider_prefix}_{p.name}": {
-            "description": p.description,
-            "unit": p.unit,
-            "type": p.type,
-            "title": p.title,
+    info["properties"] = {}
+    for p in properties:
+        if isinstance(p, PropertyDefinition):
+            p = p.dict()
+
+        p_name = (
+            f"_{provider_prefix}_{p['name']}"
+            if not p["name"].startswith(f"_{provider_prefix}")
+            else p["name"]
+        )
+        info["properties"][p_name] = {
+            "description": p.get("description"),
+            "unit": p.get("unit"),
+            "type": p.get("type"),
+            "title": p.get("title"),
         }
-        for p in properties
-    }
+
     info["properties"].update(default_properties)
     info["output_fields_by_format"] = {}
     info["output_fields_by_format"]["json"] = list(info["properties"].keys())
     return EntryInfoResource(**info)
 
 
-def convert_archive(archive_path: Path, jsonl_path: Path | None = None) -> Path:
+def convert_archive(
+    archive_path: Path, jsonl_path: Path | None = None, limit: int | None = None
+) -> Path:
     """Convert an MCloud entry to an OPTIMADE JSONL file.
 
     Parameters:
         archive_path: The location of the `optimade.yaml` file to convert.
         jsonl_path: The location to write the JSONL file to. If not provided,
             write to `<archive_path>/optimade.jsonl`.
+        limit: The maximum number of entries to parse (useful for testing).
 
     Raises:
         FileNotFoundError: If any of the data paths in the config file,
@@ -106,7 +116,9 @@ def convert_archive(archive_path: Path, jsonl_path: Path | None = None) -> Path:
 
     for entry in mc_config.entries:
         optimade_entries[entry.entry_type].extend(
-            construct_entries(archive_path, entry, PROVIDER_PREFIX).values()
+            construct_entries(
+                archive_path, entry, PROVIDER_PREFIX, limit=limit
+            ).values()
         )
 
     property_definitions = defaultdict(list)
@@ -227,21 +239,35 @@ def _parse_entries(
     archive_path: Path,
     matches_by_file: dict[str | None, list[Path]],
     entry_type: str,
+    limit: int | None = None,
 ) -> tuple[list[Any], list[str]]:
     """Loop through the matches by file and parse them into
     the intermediate format, also generating IDs for each.
+
+    Parameters:
+        archive_path: The path to the archive.
+        matches_by_file: A dictionary of matches by file.
+        entry_type: The type of entry to parse.
+        limit: The maximum number of entries to parse
 
     Returns:
         A list of parsed entries and a list of IDs.
 
     """
+    from .parsers import ENTRY_PARSERS
+
     parsed_entries = []
     entry_ids: list[str] = []
     for archive_file in matches_by_file:
-        for _path in tqdm.tqdm(
-            matches_by_file[archive_file],
-            desc=f"Parsing {entry_type} files",
+        for ind, _path in enumerate(
+            tqdm.tqdm(
+                matches_by_file[archive_file],
+                desc=f"Parsing {entry_type} files",
+            )
         ):
+            if limit and ind >= limit:
+                break
+
             path_in_archive: Path = Path(_path).relative_to(Path(archive_path))
             exceptions = {}
 
@@ -351,6 +377,8 @@ def _parse_and_assign_properties(
     dictionary of OPTIMADE entries.
 
     """
+    from .parsers import PROPERTY_PARSERS, TYPE_MAP
+
     parsed_properties: dict[str, dict[str, Any]] = defaultdict(dict)
     errors = []
     all_property_fields: set[str] = set()
@@ -421,7 +449,10 @@ def _parse_and_assign_properties(
 
 
 def construct_entries(
-    archive_path: Path, entry_config: EntryConfig, provider_prefix: str
+    archive_path: Path,
+    entry_config: EntryConfig,
+    provider_prefix: str,
+    limit: int | None = None,
 ) -> dict[str, dict]:
     """Given an archive path and an entry specification,
     loop through the provided paths and try to ingest them
@@ -435,6 +466,8 @@ def construct_entries(
             the given entry type.
 
     """
+
+    from .parsers import ENTRY_PARSERS, OPTIMADE_CONVERTERS
 
     if entry_config.entry_type not in ENTRY_PARSERS:
         raise RuntimeError(f"Parsing type {entry_config.entry_type} is not supported.")
@@ -453,6 +486,7 @@ def construct_entries(
         archive_path,
         entry_matches_by_file,
         entry_config.entry_type,
+        limit=limit,
     )
 
     # Generate a better set of entry IDs
